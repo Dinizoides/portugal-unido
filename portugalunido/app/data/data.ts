@@ -221,12 +221,12 @@ export const data: Section[] = [
     items: [
       {
         name: "Uber",
-        url: "https://www.uber.com/pt/pt/",
+        url: "https://www.uber.com/pt/pt-pt/",
         icon: "🚗",
         description: "Mobilidade urbana",
       },
       {
-        name: "Bolt",
+        name: "Bolt / Bolt Food",
         url: "https://bolt.eu/pt-pt/",
         icon: "🚗",
         description: "Mobilidade urbana",
@@ -241,12 +241,6 @@ export const data: Section[] = [
         name: "Uber Eats",
         url: "https://www.ubereats.com/pt",
         icon: "🍔",
-        description: "Entrega de comida",
-      },
-      {
-        name: "Bolt Food",
-        url: "https://bolt.eu/pt/food",
-        icon: "🍕",
         description: "Entrega de comida",
       },
       {

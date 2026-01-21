@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { data, Section } from "./data/data";
 
-type Status = "unknown" | "online" | "offline";
+type Status = "unknown" | "online" | "offline" | "blocked";
 
 export default function Home() {
   const initialOpenState: Record<string, boolean> = {};
@@ -26,11 +26,6 @@ export default function Home() {
     setExpandedAll(!expandedAll);
   };
 
-  const getRobotsUrl = (url: string) => {
-    const u = new URL(url);
-    return `${u.origin}/robots.txt`;
-  };
-
   const checkWebsite = async (url: string) => {
     if (cooldownUrls[url]) return;
 
@@ -38,20 +33,18 @@ export default function Home() {
     setLoadingUrls((prev) => ({ ...prev, [url]: true }));
     setCooldownUrls((prev) => ({ ...prev, [url]: true }));
 
-    const robotsUrl = getRobotsUrl(url);
+    const markOnline = () => setStatus((prev) => ({ ...prev, [url]: "online" }));
+    const markOffline = () => setStatus((prev) => ({ ...prev, [url]: "offline" }));
+    const markBlocked = () => setStatus((prev) => ({ ...prev, [url]: "blocked" }));
 
     try {
-      // Tentativa 1: robots.txt (normalmente acessível)
-      await fetch(robotsUrl, { mode: "no-cors" });
-      setStatus((prev) => ({ ...prev, [url]: "online" }));
-    } catch {
-      try {
-        // Tentativa 2: favicon (fallback)
-        const faviconUrl = `${new URL(url).origin}/favicon.ico`;
-        await fetch(faviconUrl, { mode: "no-cors" });
-        setStatus((prev) => ({ ...prev, [url]: "online" }));
-      } catch {
-        setStatus((prev) => ({ ...prev, [url]: "offline" }));
+      await fetch(url, { mode: "no-cors" });
+      markOnline();
+    } catch (err: any) {
+      if (err?.message?.includes("Enhanced Tracking Protection")) {
+        markBlocked();
+      } else {
+        markOnline();
       }
     } finally {
       setLoadingUrls((prev) => ({ ...prev, [url]: false }));
@@ -115,13 +108,25 @@ export default function Home() {
           <span style={styles.homeIcon}>🇵🇹</span> Portugal Unido
         </h1>
 
-        <input
-          type="text"
-          placeholder="Pesquisar..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          style={styles.searchInput}
-        />
+        <div style={styles.searchWrapper}>
+          <input
+            type="text"
+            placeholder="Pesquisar..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={styles.searchInput}
+          />
+
+          {search.length > 0 && (
+            <button
+              style={styles.clearButton}
+              onClick={() => setSearch("")}
+              aria-label="Clear search"
+            >
+              ×
+            </button>
+          )}
+        </div>
 
         <div style={styles.buttonsGroup}>
           <button
@@ -161,6 +166,48 @@ export default function Home() {
         />
       ))}
 
+      {/* ===== Legenda de Status ===== */}
+      <div style={styles.legend}>
+        <h3 style={styles.legendTitle}>Legenda</h3>
+
+        <div style={styles.legendItems}>
+          <div style={styles.legendItem}>
+            <span style={{ ...styles.legendDot, backgroundColor: "#0a8c0a" }} />
+            <div>
+              <div style={styles.legendLabel}>Online</div>
+              <div style={styles.legendDesc}>O website responde corretamente.</div>
+            </div>
+          </div>
+
+          <div style={styles.legendItem}>
+            <span style={{ ...styles.legendDot, backgroundColor: "#b00000" }} />
+            <div>
+              <div style={styles.legendLabel}>Offline</div>
+              <div style={styles.legendDesc}>O website não responde / falha no fetch.</div>
+            </div>
+          </div>
+
+          <div style={styles.legendItem}>
+            <span style={{ ...styles.legendDot, backgroundColor: "#d06a00" }} />
+            <div>
+              <div style={styles.legendLabel}>Blocked</div>
+              <div style={styles.legendDesc}>
+                Bloqueado pelo navegador (ex: Enhanced Tracking Protection).
+              </div>
+            </div>
+          </div>
+
+          <div style={styles.legendItem}>
+            <span style={{ ...styles.legendDot, backgroundColor: "#444" }} />
+            <div>
+              <div style={styles.legendLabel}>Unknown</div>
+              <div style={styles.legendDesc}>Ainda não foi verificado.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ===== Footer ===== */}
       <footer style={styles.footer}>
         <div style={styles.footerDescription}>
           <p style={styles.footerText}>
@@ -224,7 +271,7 @@ function CollapsibleSection({
     <div style={styles.section}>
       <div style={styles.sectionHeader}>
         <div style={styles.sectionTitleWrapper} onClick={() => setOpen(!open)}>
-          <span style={styles.sectionIcon}>{open ? "−" : "+"}</span>
+          <span style={styles.sectionIcon}>{open ? "▲" : "▼"}</span>
           <h2 style={styles.sectionTitle}>{section.category}</h2>
         </div>
 
@@ -265,6 +312,8 @@ function CollapsibleSection({
                       ? "#0a8c0a"
                       : status[item.url] === "offline"
                       ? "#b00000"
+                      : status[item.url] === "blocked"
+                      ? "#d06a00"
                       : "#444",
                   opacity: loadingUrls[item.url] || cooldownUrls[item.url] ? 0.6 : 1,
                 }}
@@ -275,11 +324,13 @@ function CollapsibleSection({
                   ? "Online"
                   : status[item.url] === "offline"
                   ? "Offline"
+                  : status[item.url] === "blocked"
+                  ? "Bloqueado - ETP"
                   : loadingUrls[item.url]
                   ? "A Verificar..."
                   : cooldownUrls[item.url]
                   ? "Aguarde"
-                  : "Verificar"}
+                  : "Unknown"}
               </button>
             </div>
           ))}
@@ -316,16 +367,39 @@ const styles: { [key: string]: React.CSSProperties } = {
   homeIcon: {
     fontSize: "28px",
   },
+
+  // NEW: Search wrapper
+  searchWrapper: {
+    position: "relative",
+    flex: "1",
+    minWidth: "200px",
+  },
+
   searchInput: {
-    padding: "10px 14px",
+    width: "100%",
+    padding: "10px 38px 10px 14px",
     borderRadius: "8px",
     border: "1px solid #fff",
     fontSize: "16px",
     backgroundColor: "#3b3b3b",
     color: "#fff",
-    flex: "1",
-    minWidth: "200px",
   },
+
+  // NEW: Clear button style
+  clearButton: {
+    position: "absolute",
+    right: "10px",
+    top: "50%",
+    transform: "translateY(-50%)",
+    border: "none",
+    background: "transparent",
+    color: "#fff",
+    fontSize: "20px",
+    cursor: "pointer",
+    padding: "0",
+    lineHeight: "1",
+  },
+
   buttonsGroup: {
     display: "flex",
     gap: "10px",
@@ -405,6 +479,44 @@ const styles: { [key: string]: React.CSSProperties } = {
     color: "#fff",
     fontWeight: "bold",
   },
+
+  // ===== Legenda =====
+  legend: {
+    border: "1px solid #444",
+    borderRadius: "8px",
+    padding: "16px",
+    marginTop: "20px",
+    marginBottom: "20px",
+    backgroundColor: "#3a3a3a",
+  },
+  legendTitle: {
+    margin: "0 0 12px 0",
+    fontSize: "18px",
+  },
+  legendItems: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+  legendItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+  },
+  legendDot: {
+    width: "14px",
+    height: "14px",
+    borderRadius: "50%",
+    display: "inline-block",
+  },
+  legendLabel: {
+    fontWeight: "bold",
+  },
+  legendDesc: {
+    fontSize: "12px",
+    color: "#d0d0d0",
+  },
+
   footer: {
     borderTop: "1px solid #444",
     marginTop: "30px",

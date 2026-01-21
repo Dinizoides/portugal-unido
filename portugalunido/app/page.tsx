@@ -26,6 +26,11 @@ export default function Home() {
     setExpandedAll(!expandedAll);
   };
 
+  const getRobotsUrl = (url: string) => {
+    const u = new URL(url);
+    return `${u.origin}/robots.txt`;
+  };
+
   const checkWebsite = async (url: string) => {
     if (cooldownUrls[url]) return;
 
@@ -33,11 +38,21 @@ export default function Home() {
     setLoadingUrls((prev) => ({ ...prev, [url]: true }));
     setCooldownUrls((prev) => ({ ...prev, [url]: true }));
 
+    const robotsUrl = getRobotsUrl(url);
+
     try {
-      await fetch(url, { mode: "no-cors" });
+      // Tentativa 1: robots.txt (normalmente acessível)
+      await fetch(robotsUrl, { mode: "no-cors" });
       setStatus((prev) => ({ ...prev, [url]: "online" }));
     } catch {
-      setStatus((prev) => ({ ...prev, [url]: "offline" }));
+      try {
+        // Tentativa 2: favicon (fallback)
+        const faviconUrl = `${new URL(url).origin}/favicon.ico`;
+        await fetch(faviconUrl, { mode: "no-cors" });
+        setStatus((prev) => ({ ...prev, [url]: "online" }));
+      } catch {
+        setStatus((prev) => ({ ...prev, [url]: "offline" }));
+      }
     } finally {
       setLoadingUrls((prev) => ({ ...prev, [url]: false }));
       setTimeout(() => {
